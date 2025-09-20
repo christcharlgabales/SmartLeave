@@ -20,7 +20,7 @@ class LeaveRepository {
         .toList();
   }
 
-  // Submit leave request - now takes individual parameters instead of LeaveRequest object
+  // Fixed submit leave request method
   Future<LeaveRequest> submitLeaveRequest({
     required String userId,
     required String leaveTypeId,
@@ -32,126 +32,221 @@ class LeaveRepository {
     String? halfDayPeriod,
     String? managerId,
   }) async {
-    final requestData = {
-      'user_id': userId,
-      'leave_type_id': leaveTypeId,
-      'start_date': startDate.toIso8601String().split('T')[0],
-      'end_date': endDate.toIso8601String().split('T')[0],
-      'total_days': totalDays,
-      'reason': reason,
-      'is_half_day': isHalfDay,
-      'half_day_period': halfDayPeriod,
-      'manager_id': managerId,
-      'status': 'pending',
-    };
+    try {
+      // Normalize dates to remove time component
+      final normalizedStart = DateTime(startDate.year, startDate.month, startDate.day);
+      final normalizedEnd = DateTime(endDate.year, endDate.month, endDate.day);
+      
+      // Validate and recalculate total days to match database constraint
+      double validatedTotalDays;
+      
+      if (isHalfDay) {
+        // Half day requests should have same start and end date
+        if (!normalizedStart.isAtSameMomentAs(normalizedEnd)) {
+          throw Exception('Half-day requests must have the same start and end date');
+        }
+        validatedTotalDays = 0.5;
+      } else {
+        // Calculate total days including both start and end date
+        final daysDifference = normalizedEnd.difference(normalizedStart).inDays;
+        validatedTotalDays = (daysDifference + 1).toDouble();
+      }
+      
+      // Ensure the calculated days match what was passed
+      if ((validatedTotalDays - totalDays).abs() > 0.01) {
+        print('=== Days Mismatch ===');
+        print('Passed total days: $totalDays');
+        print('Calculated total days: $validatedTotalDays');
+        print('Using calculated value: $validatedTotalDays');
+      }
 
-    final response = await _client
-        .from('leave_requests')
-        .insert(requestData)
-        .select('''
-          *,
-          leave_types(*),
-          manager:profiles!manager_id(*)
-        ''')
-        .single();
+      // Prepare the data to insert
+      final requestData = <String, dynamic>{
+        'user_id': userId,
+        'leave_type_id': leaveTypeId,
+        'start_date': normalizedStart.toIso8601String().split('T')[0],
+        'end_date': normalizedEnd.toIso8601String().split('T')[0],
+        'total_days': validatedTotalDays, // Use the validated calculation
+        'reason': reason.trim(),
+        'is_half_day': isHalfDay,
+        'status': 'pending',
+        'created_at': DateTime.now().toIso8601String(),
+      };
 
-    return LeaveRequest.fromJson(response);
+      // Add optional fields only if they have values
+      if (halfDayPeriod != null && halfDayPeriod.isNotEmpty) {
+        requestData['half_day_period'] = halfDayPeriod;
+      }
+      
+      if (managerId != null && managerId.isNotEmpty) {
+        requestData['manager_id'] = managerId;
+      }
+
+      print('=== Repository: Inserting data ===');
+      print('Data to insert: $requestData');
+
+      // First, insert the basic record without complex joins
+      final insertResponse = await _client
+          .from('leave_requests')
+          .insert(requestData)
+          .select()
+          .single();
+
+      print('=== Insert successful ===');
+      print('Inserted record: $insertResponse');
+
+      // Then fetch the complete record with relationships
+      final completeResponse = await _client
+          .from('leave_requests')
+          .select('''
+            *,
+            leave_types(*),
+            profiles!leave_requests_manager_id_fkey(*)
+          ''')
+          .eq('id', insertResponse['id'])
+          .single();
+
+      print('=== Complete record fetched ===');
+      return LeaveRequest.fromJson(completeResponse);
+      
+    } catch (e) {
+      print('=== Repository Error ===');
+      print('Error type: ${e.runtimeType}');
+      print('Error details: $e');
+      
+      if (e is PostgrestException) {
+        print('Postgrest error code: ${e.code}');
+        print('Postgrest error message: ${e.message}');
+        print('Postgrest error details: ${e.details}');
+        print('Postgrest error hint: ${e.hint}');
+      }
+      
+      throw Exception('Failed to submit leave request: ${e.toString()}');
+    }
   }
 
   // Get user's leave requests
   Future<List<LeaveRequest>> getUserLeaveRequests(String userId) async {
-    final response = await _client
-        .from('leave_requests')
-        .select('''
-          *,
-          leave_types(*),
-          manager:profiles!manager_id(*)
-        ''')
-        .eq('user_id', userId)
-        .order('created_at', ascending: false);
+    try {
+      final response = await _client
+          .from('leave_requests')
+          .select('''
+            *,
+            leave_types(*),
+            profiles!leave_requests_manager_id_fkey(*)
+          ''')
+          .eq('user_id', userId)
+          .order('created_at', ascending: false);
 
-    return (response as List)
-        .map((json) => LeaveRequest.fromJson(json))
-        .toList();
+      return (response as List)
+          .map((json) => LeaveRequest.fromJson(json))
+          .toList();
+    } catch (e) {
+      print('Error fetching user requests: $e');
+      rethrow;
+    }
   }
 
   // Get team leave requests (for managers)
   Future<List<LeaveRequest>> getTeamLeaveRequests(String managerId) async {
-    final response = await _client
-        .from('leave_requests')
-        .select('''
-          *,
-          leave_types(*),
-          user:profiles!user_id(*)
-        ''')
-        .eq('manager_id', managerId)
-        .order('created_at', ascending: false);
+    try {
+      final response = await _client
+          .from('leave_requests')
+          .select('''
+            *,
+            leave_types(*),
+            profiles!leave_requests_user_id_fkey(*)
+          ''')
+          .eq('manager_id', managerId)
+          .order('created_at', ascending: false);
 
-    return (response as List)
-        .map((json) => LeaveRequest.fromJson(json))
-        .toList();
+      return (response as List)
+          .map((json) => LeaveRequest.fromJson(json))
+          .toList();
+    } catch (e) {
+      print('Error fetching team requests: $e');
+      rethrow;
+    }
   }
 
   // Get pending requests for manager
   Future<List<LeaveRequest>> getPendingRequests(String managerId) async {
-    final response = await _client
-        .from('leave_requests')
-        .select('''
-          *,
-          leave_types(*),
-          user:profiles!user_id(*)
-        ''')
-        .eq('manager_id', managerId)
-        .eq('status', 'pending')
-        .order('created_at', ascending: false);
+    try {
+      final response = await _client
+          .from('leave_requests')
+          .select('''
+            *,
+            leave_types(*),
+            profiles!leave_requests_user_id_fkey(*)
+          ''')
+          .eq('manager_id', managerId)
+          .eq('status', 'pending')
+          .order('created_at', ascending: false);
 
-    return (response as List)
-        .map((json) => LeaveRequest.fromJson(json))
-        .toList();
+      return (response as List)
+          .map((json) => LeaveRequest.fromJson(json))
+          .toList();
+    } catch (e) {
+      print('Error fetching pending requests: $e');
+      rethrow;
+    }
   }
 
-  // Approve/Reject leave request - now takes approver ID as parameter
+  // Update leave request status
   Future<LeaveRequest> updateLeaveRequestStatus(
     String requestId, 
     LeaveStatus status, 
     String? comments,
-    String approverId, // Add this parameter
+    String approverId,
   ) async {
-    final updateData = {
-      'status': status.name,
-      'approved_by': approverId,
-      'approved_at': DateTime.now().toIso8601String(),
-      'manager_comments': comments,
-    };
+    try {
+      final updateData = <String, dynamic>{
+        'status': status.name,
+        'approved_by': approverId,
+        'approved_at': DateTime.now().toIso8601String(),
+      };
 
-    final response = await _client
-        .from('leave_requests')
-        .update(updateData)
-        .eq('id', requestId)
-        .select('''
-          *,
-          leave_types(*),
-          user:profiles!user_id(*)
-        ''')
-        .single();
+      if (comments != null && comments.isNotEmpty) {
+        updateData['manager_comments'] = comments;
+      }
 
-    return LeaveRequest.fromJson(response);
+      final response = await _client
+          .from('leave_requests')
+          .update(updateData)
+          .eq('id', requestId)
+          .select('''
+            *,
+            leave_types(*),
+            profiles!leave_requests_user_id_fkey(*)
+          ''')
+          .single();
+
+      return LeaveRequest.fromJson(response);
+    } catch (e) {
+      print('Error updating request status: $e');
+      rethrow;
+    }
   }
 
-  // Cancel leave request (by user)
+  // Cancel leave request
   Future<LeaveRequest> cancelLeaveRequest(String requestId) async {
-    final response = await _client
-        .from('leave_requests')
-        .update({'status': 'cancelled'})
-        .eq('id', requestId)
-        .select('''
-          *,
-          leave_types(*),
-          manager:profiles!manager_id(*)
-        ''')
-        .single();
+    try {
+      final response = await _client
+          .from('leave_requests')
+          .update({'status': 'cancelled'})
+          .eq('id', requestId)
+          .select('''
+            *,
+            leave_types(*),
+            profiles!leave_requests_manager_id_fkey(*)
+          ''')
+          .single();
 
-    return LeaveRequest.fromJson(response);
+      return LeaveRequest.fromJson(response);
+    } catch (e) {
+      print('Error cancelling request: $e');
+      rethrow;
+    }
   }
 
   // Get leave requests by date range
@@ -160,26 +255,31 @@ class LeaveRepository {
     DateTime endDate,
     {String? userId}
   ) async {
-    var query = _client
-        .from('leave_requests')
-        .select('''
-          *,
-          leave_types(*),
-          user:profiles!user_id(*)
-        ''')
-        .gte('start_date', startDate.toIso8601String().split('T')[0])
-        .lte('end_date', endDate.toIso8601String().split('T')[0])
-        .eq('status', 'approved');
+    try {
+      var query = _client
+          .from('leave_requests')
+          .select('''
+            *,
+            leave_types(*),
+            profiles!leave_requests_user_id_fkey(*)
+          ''')
+          .gte('start_date', startDate.toIso8601String().split('T')[0])
+          .lte('end_date', endDate.toIso8601String().split('T')[0])
+          .eq('status', 'approved');
 
-    if (userId != null) {
-      query = query.eq('user_id', userId);
+      if (userId != null) {
+        query = query.eq('user_id', userId);
+      }
+
+      final response = await query.order('start_date');
+
+      return (response as List)
+          .map((json) => LeaveRequest.fromJson(json))
+          .toList();
+    } catch (e) {
+      print('Error fetching requests by date range: $e');
+      rethrow;
     }
-
-    final response = await query.order('start_date');
-
-    return (response as List)
-        .map((json) => LeaveRequest.fromJson(json))
-        .toList();
   }
 
   // Real-time subscription for leave requests

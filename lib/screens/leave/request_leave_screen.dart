@@ -148,7 +148,10 @@ class _RequestLeaveScreenState extends State<RequestLeaveScreen> {
             setState(() {
               _selectedLeaveType = leaveType;
             });
-            _calculateDays();
+            // Add a small delay to ensure form state is updated
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _calculateDays();
+            });
           },
         ),
       ],
@@ -180,7 +183,12 @@ class _RequestLeaveScreenState extends State<RequestLeaveScreen> {
                 firstDate: DateTime.now(),
                 lastDate: DateTime.now().add(const Duration(days: 365)),
                 validator: FormBuilderValidators.required(),
-                onChanged: (_) => _calculateDays(),
+                onChanged: (value) {
+                  // Add a small delay to ensure form state is updated
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    _calculateDays();
+                  });
+                },
               ),
             ),
             const SizedBox(width: 16),
@@ -197,13 +205,18 @@ class _RequestLeaveScreenState extends State<RequestLeaveScreen> {
                 lastDate: DateTime.now().add(const Duration(days: 365)),
                 validator: (value) {
                   if (value == null) return 'End date is required';
-                  final startDate = _formKey.currentState?.value['startDate'];
+                  final startDate = _formKey.currentState?.value['startDate'] as DateTime?;
                   if (startDate != null && value.isBefore(startDate)) {
                     return 'End date must be after start date';
                   }
                   return null;
                 },
-                onChanged: (_) => _calculateDays(),
+                onChanged: (value) {
+                  // Add a small delay to ensure form state is updated
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    _calculateDays();
+                  });
+                },
               ),
             ),
           ],
@@ -223,7 +236,10 @@ class _RequestLeaveScreenState extends State<RequestLeaveScreen> {
             setState(() {
               _isHalfDay = value ?? false;
             });
-            _calculateDays();
+            // Add a small delay to ensure form state is updated
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _calculateDays();
+            });
           },
         ),
         if (_isHalfDay) ...[
@@ -261,10 +277,12 @@ class _RequestLeaveScreenState extends State<RequestLeaveScreen> {
             ),
           ),
           Text(
-            _calculatedDays.toStringAsFixed(1),
+            _calculatedDays == 0 ? '0.0' : _calculatedDays.toStringAsFixed(1),
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.primary,
+              color: _calculatedDays == 0 
+                  ? Colors.grey 
+                  : Theme.of(context).colorScheme.primary,
             ),
           ),
         ],
@@ -273,7 +291,9 @@ class _RequestLeaveScreenState extends State<RequestLeaveScreen> {
   }
 
   Widget _buildLeaveBalanceCheck(user) {
-    final balance = user.leaveBalance[_selectedLeaveType!.id] ?? 0.0;
+    if (_selectedLeaveType == null) return const SizedBox.shrink();
+    
+    final balance = user.leaveBalance[_selectedLeaveType!.id]?.toDouble() ?? 0.0;
     final hasEnoughBalance = balance >= _calculatedDays;
     
     return Container(
@@ -348,13 +368,17 @@ class _RequestLeaveScreenState extends State<RequestLeaveScreen> {
   Widget _buildSubmitButton(AuthProvider authProvider, LeaveProvider leaveProvider) {
     final user = authProvider.currentUser!;
     final hasEnoughBalance = _selectedLeaveType != null 
-        ? (user.leaveBalance[_selectedLeaveType!.id] ?? 0.0) >= _calculatedDays
+        ? (user.leaveBalance[_selectedLeaveType!.id]?.toDouble() ?? 0.0) >= _calculatedDays
         : false;
+    
+    // Check if the form has all required data
+    final canSubmit = _selectedLeaveType != null && 
+                     _calculatedDays > 0 && 
+                     hasEnoughBalance && 
+                     !leaveProvider.isLoading;
 
     return ElevatedButton(
-      onPressed: (leaveProvider.isLoading || !hasEnoughBalance) 
-          ? null 
-          : _handleSubmit,
+      onPressed: canSubmit ? _handleSubmit : null,
       style: ElevatedButton.styleFrom(
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
@@ -374,25 +398,49 @@ class _RequestLeaveScreenState extends State<RequestLeaveScreen> {
   }
 
   void _calculateDays() {
+    // Save the current form state first
+    _formKey.currentState?.save();
+    
     final formData = _formKey.currentState?.value;
-    if (formData != null && 
-        formData['startDate'] != null && 
-        formData['endDate'] != null) {
+    if (formData == null) {
+      print('Form data is null');
+      return;
+    }
+    
+    final startDate = formData['startDate'] as DateTime?;
+    final endDate = formData['endDate'] as DateTime?;
+    final isHalfDay = formData['isHalfDay'] ?? false;
+    
+    print('Calculating days - Start: $startDate, End: $endDate, Half Day: $isHalfDay');
+    
+    if (startDate != null && endDate != null) {
+      double days;
       
-      final startDate = formData['startDate'] as DateTime;
-      final endDate = formData['endDate'] as DateTime;
-      final isHalfDay = formData['isHalfDay'] ?? false;
-      
-      if (isHalfDay && startDate.isAtSameMomentAs(endDate)) {
-        setState(() {
-          _calculatedDays = 0.5;
-        });
+      if (isHalfDay) {
+        // For half day, both start and end date should be the same
+        if (startDate.year == endDate.year && 
+            startDate.month == endDate.month && 
+            startDate.day == endDate.day) {
+          days = 0.5;
+        } else {
+          // If half day is selected but dates are different, calculate normal days
+          days = endDate.difference(startDate).inDays + 1;
+        }
       } else {
-        final days = endDate.difference(startDate).inDays + 1;
-        setState(() {
-          _calculatedDays = days.toDouble();
-        });
+        // Calculate full days (inclusive of both start and end date)
+        days = endDate.difference(startDate).inDays + 1;
       }
+      
+      print('Calculated days: $days');
+      
+      setState(() {
+        _calculatedDays = days.toDouble();
+      });
+    } else {
+      print('Start or end date is null');
+      setState(() {
+        _calculatedDays = 0;
+      });
     }
   }
 
@@ -404,35 +452,61 @@ class _RequestLeaveScreenState extends State<RequestLeaveScreen> {
       
       final user = authProvider.currentUser!;
       
-      // Updated to match the new provider method signature
-      final success = await leaveProvider.submitLeaveRequest(
-        userId: user.id,
-        leaveTypeId: _selectedLeaveType!.id,
-        startDate: formData['startDate'],
-        endDate: formData['endDate'],
-        totalDays: _calculatedDays,
-        reason: formData['reason'],
-        isHalfDay: _isHalfDay,
-        halfDayPeriod: _isHalfDay ? formData['halfDayPeriod'] : null,
-        managerId: user.managerId,
-      );
+      // Debug: Print the data being sent
+      print('Submitting leave request with data:');
+      print('User ID: ${user.id}');
+      print('Leave Type ID: ${_selectedLeaveType!.id}');
+      print('Start Date: ${formData['startDate']}');
+      print('End Date: ${formData['endDate']}');
+      print('Total Days: $_calculatedDays');
+      print('Reason: ${formData['reason']}');
+      print('Is Half Day: $_isHalfDay');
+      print('Half Day Period: ${_isHalfDay ? formData['halfDayPeriod'] : null}');
+      print('Manager ID: ${user.managerId}');
       
-      if (success && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Leave request submitted successfully!'),
-            backgroundColor: Colors.green,
-          ),
+      try {
+        final success = await leaveProvider.submitLeaveRequest(
+          userId: user.id,
+          leaveTypeId: _selectedLeaveType!.id,
+          startDate: formData['startDate'],
+          endDate: formData['endDate'],
+          totalDays: _calculatedDays,
+          reason: formData['reason'],
+          isHalfDay: _isHalfDay,
+          halfDayPeriod: _isHalfDay ? formData['halfDayPeriod'] : null,
+          managerId: user.managerId,
         );
-        context.go('/dashboard');
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(leaveProvider.errorMessage ?? 'Failed to submit request'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        
+        if (success && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Leave request submitted successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          context.go('/dashboard');
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(leaveProvider.errorMessage ?? 'Failed to submit request'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } catch (e) {
+        print('Error submitting leave request: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
+    } else {
+      print('Form validation failed');
+      print('Form errors: ${_formKey.currentState?.errors}');
     }
   }
 }
