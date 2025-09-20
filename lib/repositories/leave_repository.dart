@@ -20,12 +20,39 @@ class LeaveRepository {
         .toList();
   }
 
-  // Submit leave request
-  Future<LeaveRequest> submitLeaveRequest(LeaveRequest request) async {
+  // Submit leave request - now takes individual parameters instead of LeaveRequest object
+  Future<LeaveRequest> submitLeaveRequest({
+    required String userId,
+    required String leaveTypeId,
+    required DateTime startDate,
+    required DateTime endDate,
+    required double totalDays,
+    required String reason,
+    bool isHalfDay = false,
+    String? halfDayPeriod,
+    String? managerId,
+  }) async {
+    final requestData = {
+      'user_id': userId,
+      'leave_type_id': leaveTypeId,
+      'start_date': startDate.toIso8601String().split('T')[0],
+      'end_date': endDate.toIso8601String().split('T')[0],
+      'total_days': totalDays,
+      'reason': reason,
+      'is_half_day': isHalfDay,
+      'half_day_period': halfDayPeriod,
+      'manager_id': managerId,
+      'status': 'pending',
+    };
+
     final response = await _client
         .from('leave_requests')
-        .insert(request.toJson())
-        .select()
+        .insert(requestData)
+        .select('''
+          *,
+          leave_types(*),
+          manager:profiles!manager_id(*)
+        ''')
         .single();
 
     return LeaveRequest.fromJson(response);
@@ -83,17 +110,16 @@ class LeaveRepository {
         .toList();
   }
 
-  // Approve/Reject leave request
+  // Approve/Reject leave request - now takes approver ID as parameter
   Future<LeaveRequest> updateLeaveRequestStatus(
     String requestId, 
     LeaveStatus status, 
     String? comments,
+    String approverId, // Add this parameter
   ) async {
-    final userId = SupabaseConfig.currentUserId!;
-    
     final updateData = {
       'status': status.name,
-      'approved_by': userId,
+      'approved_by': approverId,
       'approved_at': DateTime.now().toIso8601String(),
       'manager_comments': comments,
     };

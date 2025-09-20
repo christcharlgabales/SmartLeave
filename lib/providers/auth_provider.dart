@@ -40,9 +40,16 @@ class AuthProvider extends ChangeNotifier {
   Future<void> _loadUserProfile() async {
     try {
       _currentUser = await _authRepository.getCurrentUserProfile();
+      
+      // If profile doesn't exist yet (database trigger delay), retry after a delay
+      if (_currentUser == null && Supabase.instance.client.auth.currentUser != null) {
+        await Future.delayed(const Duration(seconds: 2));
+        _currentUser = await _authRepository.getCurrentUserProfile();
+      }
+      
       notifyListeners();
     } catch (e) {
-      _errorMessage = e.toString();
+      _errorMessage = _extractErrorMessage(e.toString());
       notifyListeners();
     }
   }
@@ -55,11 +62,11 @@ class AuthProvider extends ChangeNotifier {
       final response = await _authRepository.signIn(email, password);
       if (response.user != null) {
         await _loadUserProfile();
-        return true;
+        return _currentUser != null;
       }
       return false;
     } catch (e) {
-      _errorMessage = e.toString();
+      _errorMessage = _extractErrorMessage(e.toString());
       return false;
     } finally {
       _setLoading(false);
@@ -72,12 +79,9 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       final response = await _authRepository.signUp(email, password, fullName);
-      if (response.user != null) {
-        return true;
-      }
-      return false;
+      return response.user != null;
     } catch (e) {
-      _errorMessage = e.toString();
+      _errorMessage = _extractErrorMessage(e.toString());
       return false;
     } finally {
       _setLoading(false);
@@ -90,7 +94,7 @@ class AuthProvider extends ChangeNotifier {
       await _authRepository.signOut();
       _currentUser = null;
     } catch (e) {
-      _errorMessage = e.toString();
+      _errorMessage = _extractErrorMessage(e.toString());
     } finally {
       _setLoading(false);
     }
@@ -104,5 +108,28 @@ class AuthProvider extends ChangeNotifier {
   void clearError() {
     _errorMessage = null;
     notifyListeners();
+  }
+
+  // Helper method to extract user-friendly error messages
+  String _extractErrorMessage(String error) {
+    if (error.contains('Invalid login credentials')) {
+      return 'Invalid email or password. Please try again.';
+    }
+    if (error.contains('Email not confirmed')) {
+      return 'Please check your email and confirm your account before signing in.';
+    }
+    if (error.contains('User already registered')) {
+      return 'An account with this email already exists.';
+    }
+    if (error.contains('Password should be at least')) {
+      return 'Password must be at least 6 characters long.';
+    }
+    if (error.contains('Unable to validate email address')) {
+      return 'Please enter a valid email address.';
+    }
+    if (error.contains('infinite recursion')) {
+      return 'Database configuration error. Please contact support.';
+    }
+    return 'Something went wrong. Please try again.';
   }
 }

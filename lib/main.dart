@@ -1,50 +1,45 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-void main() {
-  runApp(const MyApp());
+// Import your providers and screens
+import 'providers/auth_provider.dart';
+import 'providers/leave_provider.dart';  // Add this import
+import 'routes/app_router.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize Supabase
+  await Supabase.initialize(
+    url: 'https://igwvqebnplzvtapuxlqy.supabase.co',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlnd3ZxZWJucGx6dnRhcHV4bHF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgzODYxNzUsImV4cCI6MjA3Mzk2MjE3NX0.hdjOW-mXLnN2zB4MaCQVFEo_mdcO30VUBZ7510Mqm2w',
+  );
+
+  runApp(const SmartLeaveApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class SmartLeaveApp extends StatelessWidget {
+  const SmartLeaveApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Leave Management System',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        useMaterial3: true,
-      ),
-      home: const TestScreen(),
-    );
-  }
-}
-
-class TestScreen extends StatelessWidget {
-  const TestScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Leave Management System'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-      ),
-      body: const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.check_circle, size: 64, color: Colors.green),
-            SizedBox(height: 16),
-            Text(
-              'Setup Working! 🎉',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 8),
-            Text('Now you can add the other files'),
-          ],
+    // Create AuthProvider instance
+    final authProvider = AuthProvider();
+    
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: authProvider),
+        ChangeNotifierProvider(create: (_) => LeaveProvider()), // Add LeaveProvider
+        // Add other providers here as needed
+      ],
+      child: MaterialApp.router(
+        title: 'SmartLeave',
+        routerConfig: AppRouter(authProvider).router, // Pass authProvider to AppRouter
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+          useMaterial3: true,
         ),
       ),
     );

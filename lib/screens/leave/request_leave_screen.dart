@@ -404,23 +404,18 @@ class _RequestLeaveScreenState extends State<RequestLeaveScreen> {
       
       final user = authProvider.currentUser!;
       
-      final leaveRequest = LeaveRequest(
-        id: '', // Will be set by database
+      // Updated to match the new provider method signature
+      final success = await leaveProvider.submitLeaveRequest(
         userId: user.id,
         leaveTypeId: _selectedLeaveType!.id,
         startDate: formData['startDate'],
         endDate: formData['endDate'],
         totalDays: _calculatedDays,
         reason: formData['reason'],
-        status: LeaveStatus.pending,
-        managerId: user.managerId,
         isHalfDay: _isHalfDay,
         halfDayPeriod: _isHalfDay ? formData['halfDayPeriod'] : null,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
+        managerId: user.managerId,
       );
-
-      final success = await leaveProvider.submitLeaveRequest(leaveRequest);
       
       if (success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

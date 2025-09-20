@@ -14,45 +14,34 @@ class AuthRepository {
     );
   }
 
-  // Sign up with email and password
+  // Sign up with email and password (using database trigger for profile creation)
   Future<AuthResponse> signUp(String email, String password, String fullName) async {
     final response = await _client.auth.signUp(
       email: email,
       password: password,
+      data: {'full_name': fullName}, // Pass to trigger instead of manual creation
     );
-    
-    // Create profile after successful signup
-    if (response.user != null) {
-      await createProfile(response.user!.id, email, fullName);
-    }
     
     return response;
   }
 
-  // Create user profile
-  Future<void> createProfile(String userId, String email, String fullName) async {
-    await _client.from('profiles').insert({
-      'id': userId,
-      'email': email,
-      'full_name': fullName,
-      'role': 'employee',
-      'is_active': true,
-      'leave_balance': {},
-    });
-  }
-
   // Get current user profile
   Future<UserProfile?> getCurrentUserProfile() async {
-    final userId = SupabaseConfig.currentUserId;
-    if (userId == null) return null;
+    final user = _client.auth.currentUser;
+    if (user == null) return null;
 
-    final response = await _client
-        .from('profiles')
-        .select()
-        .eq('id', userId)
-        .single();
+    try {
+      final response = await _client
+          .from('profiles')
+          .select()
+          .eq('id', user.id)
+          .single();
 
-    return UserProfile.fromJson(response);
+      return UserProfile.fromJson(response);
+    } catch (e) {
+      // Profile might not exist yet due to trigger delay
+      return null;
+    }
   }
 
   // Sign out
