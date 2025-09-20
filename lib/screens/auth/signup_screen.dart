@@ -28,7 +28,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
         ),
       ),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
           child: Consumer<AuthProvider>(
             builder: (context, authProvider, child) {
@@ -158,6 +158,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Theme.of(context).colorScheme.primary,
                         foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
                       ),
                       child: authProvider.isLoading
                           ? const SizedBox(
@@ -194,3 +195,36 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   ],
                 ),
               );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleSignUp() async {
+    if (_formKey.currentState?.saveAndValidate() ?? false) {
+      final formData = _formKey.currentState!.value;
+      final authProvider = context.read<AuthProvider>();
+      
+      authProvider.clearError();
+      
+      final success = await authProvider.signUp(
+        formData['email'],
+        formData['password'],
+        formData['fullName'],
+      );
+
+      if (success && mounted) {
+        // Show success message and navigate to login
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Account created successfully! Please check your email to verify.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        context.go('/login');
+      }
+    }
+  }
+}
