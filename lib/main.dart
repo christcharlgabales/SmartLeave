@@ -1,19 +1,7 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'config/supabase_config.dart';
-import 'providers/auth_provider.dart';
-import 'providers/leave_provider.dart';
-import 'providers/user_provider.dart';
-import 'routes/app_router.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  
-  // Initialize Supabase
-  await SupabaseConfig.initialize();
-  
+void main() {
   runApp(const MyApp());
 }
 
@@ -22,44 +10,42 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (context) => AuthProvider()),
-        ChangeNotifierProvider(create: (context) => LeaveProvider()),
-        ChangeNotifierProvider(create: (context) => UserProvider()),
-      ],
-      child: Consumer<AuthProvider>(
-        builder: (context, authProvider, child) {
-          return MaterialApp.router(
-            title: 'Leave Management System',
-            debugShowCheckedModeBanner: false,
-            theme: ThemeData(
-              colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-              useMaterial3: true,
-              appBarTheme: const AppBarTheme(
-                centerTitle: true,
-                elevation: 0,
-                backgroundColor: Colors.transparent,
-                foregroundColor: Colors.black87,
-              ),
-              elevatedButtonTheme: ElevatedButtonThemeData(
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-              inputDecorationTheme: InputDecorationTheme(
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              ),
+    return MaterialApp(
+      title: 'Leave Management System',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        useMaterial3: true,
+      ),
+      home: const TestScreen(),
+    );
+  }
+}
+
+class TestScreen extends StatelessWidget {
+  const TestScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Leave Management System'),
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+      ),
+      body: const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.check_circle, size: 64, color: Colors.green),
+            SizedBox(height: 16),
+            Text(
+              'Setup Working! 🎉',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
-            routerConfig: AppRouter(authProvider).router,
-          );
-        },
+            SizedBox(height: 8),
+            Text('Now you can add the other files'),
+          ],
+        ),
       ),
     );
   }
