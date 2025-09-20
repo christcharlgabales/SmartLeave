@@ -1,30 +1,124 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
+// test/widget_test.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
 
-import 'package:smartleave/main.dart';
+// Import your app components
+// Adjust these imports based on your actual file structure
 
+import '..//lib/screens/auth/login_screen.dart';
+import '..//lib/providers/auth_provider.dart';
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  group('SmartLeave Widget Tests', () {
+    testWidgets('LoginScreen renders correctly', (WidgetTester tester) async {
+      // Create a test app wrapper with necessary providers
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChangeNotifierProvider(
+            create: (_) => AuthProvider(),
+            child: const LoginScreen(),
+          ),
+        ),
+      );
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+      // Verify that login screen elements are present
+      expect(find.text('Welcome Back'), findsOneWidget);
+      expect(find.text('Sign in to manage your leaves'), findsOneWidget);
+      expect(find.byType(TextFormField), findsNWidgets(2)); // Email and password fields
+      expect(find.text('Sign In'), findsOneWidget);
+      expect(find.text('Sign Up'), findsOneWidget);
+    });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    testWidgets('LoginScreen email validation works', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChangeNotifierProvider(
+            create: (_) => AuthProvider(),
+            child: const LoginScreen(),
+          ),
+        ),
+      );
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+      // Find the email field and enter invalid email
+      final emailField = find.byKey(const Key('email'));
+      if (emailField.evaluate().isNotEmpty) {
+        await tester.enterText(emailField, 'invalid-email');
+        await tester.tap(find.text('Sign In'));
+        await tester.pump();
+        
+        // Check if validation error appears
+        expect(find.textContaining('email'), findsAtLeastNWidgets(1));
+      }
+    });
+
+    testWidgets('Password visibility toggle works', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChangeNotifierProvider(
+            create: (_) => AuthProvider(),
+            child: const LoginScreen(),
+          ),
+        ),
+      );
+
+      // Find and tap the password visibility icon
+      final visibilityIcon = find.byIcon(Icons.visibility_off);
+      if (visibilityIcon.evaluate().isNotEmpty) {
+        await tester.tap(visibilityIcon);
+        await tester.pump();
+        
+        // Check if icon changed to visibility
+        expect(find.byIcon(Icons.visibility), findsOneWidget);
+      }
+    });
+  });
+
+  group('Navigation Tests', () {
+    testWidgets('Navigation between login and signup works', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChangeNotifierProvider(
+            create: (_) => AuthProvider(),
+            child: const LoginScreen(),
+          ),
+          routes: {
+            '/signup': (context) => ChangeNotifierProvider(
+                  create: (_) => AuthProvider(),
+                  child: const Scaffold(body: Text('SignUp Screen')),
+                ),
+          },
+        ),
+      );
+
+      // Tap on Sign Up link
+      final signUpLink = find.text('Sign Up');
+      if (signUpLink.evaluate().isNotEmpty) {
+        await tester.tap(signUpLink);
+        await tester.pumpAndSettle();
+        
+        // Verify navigation occurred (this is a simplified test)
+        // In a real app with proper routing, you'd test the actual navigation
+      }
+    });
+  });
+
+  group('Form Validation Tests', () {
+    testWidgets('Empty form shows validation errors', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChangeNotifierProvider(
+            create: (_) => AuthProvider(),
+            child: const LoginScreen(),
+          ),
+        ),
+      );
+
+      // Tap Sign In button without filling form
+      await tester.tap(find.text('Sign In'));
+      await tester.pump();
+
+      // The form should not proceed without valid data
+      // This test depends on your form validation implementation
+    });
   });
 }

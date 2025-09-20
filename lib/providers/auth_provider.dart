@@ -32,7 +32,7 @@ class AuthProvider extends ChangeNotifier {
     });
 
     // Load current user if already authenticated
-    if (SupabaseConfig.currentUser != null) {
+    if (Supabase.instance.client.auth.currentUser != null) {
       await _loadUserProfile();
     }
   }

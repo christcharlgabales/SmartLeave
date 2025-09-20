@@ -1,4 +1,21 @@
 // lib/widgets/main_navigation.dart
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+class NavigationItem {
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+  final String route;
+
+  NavigationItem({
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+    required this.route,
+  });
+}
+
 class MainNavigation extends StatefulWidget {
   final Widget child;
 
@@ -69,18 +86,4 @@ class _MainNavigationState extends State<MainNavigation> {
       ),
     );
   }
-}
-
-class NavigationItem {
-  final IconData icon;
-  final IconData activeIcon;
-  final String label;
-  final String route;
-
-  NavigationItem({
-    required this.icon,
-    required this.activeIcon,
-    required this.label,
-    required this.route,
-  });
 }

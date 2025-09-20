@@ -1,4 +1,9 @@
 // lib/models/leave_request.dart
+import 'leave_type.dart';
+import 'user_profile.dart';
+
+enum LeaveStatus { pending, approved, rejected, cancelled }
+
 class LeaveRequest {
   final String id;
   final String userId;
@@ -97,6 +102,60 @@ class LeaveRequest {
     };
   }
 
+  // Helper method to get status color
+  String get statusColor {
+    switch (status) {
+      case LeaveStatus.pending:
+        return '#FFA500'; // Orange
+      case LeaveStatus.approved:
+        return '#4CAF50'; // Green
+      case LeaveStatus.rejected:
+        return '#F44336'; // Red
+      case LeaveStatus.cancelled:
+        return '#9E9E9E'; // Grey
+    }
+  }
+
+  // Helper method to get readable status
+  String get statusText {
+    switch (status) {
+      case LeaveStatus.pending:
+        return 'Pending';
+      case LeaveStatus.approved:
+        return 'Approved';
+      case LeaveStatus.rejected:
+        return 'Rejected';
+      case LeaveStatus.cancelled:
+        return 'Cancelled';
+    }
+  }
+
+  // Helper method to calculate duration in days
+  int get durationInDays {
+    return endDate.difference(startDate).inDays + 1;
+  }
+
+  // Helper method to check if leave is in the past
+  bool get isPast => endDate.isBefore(DateTime.now());
+
+  // Helper method to check if leave is current
+  bool get isCurrent {
+    final now = DateTime.now();
+    return startDate.isBefore(now) && endDate.isAfter(now);
+  }
+
+  // Helper method to check if leave is future
+  bool get isFuture => startDate.isAfter(DateTime.now());
+
+  // Helper method to get user's display name
+  String get userName => user?.fullName ?? 'Unknown User';
+
+  // Helper method to get leave type name
+  String get leaveTypeName => leaveType?.name ?? 'Unknown Leave Type';
+
+  // Helper method to get manager's display name
+  String get managerName => manager?.fullName ?? 'No Manager';
+
   // Helper method to create a copy with updated fields
   LeaveRequest copyWith({
     String? id,
@@ -129,5 +188,3 @@ class LeaveRequest {
     );
   }
 }
-
-enum LeaveStatus { pending, approved, rejected, cancelled }
